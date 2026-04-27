@@ -238,19 +238,45 @@ def test_loader_lists_dataset_documents_without_query() -> None:
     from langchain_vectoramp import VectorAmpLoader
 
     class MockClient:
-        def list_documents(self, dataset_id: str, *, limit: int, cursor: str | None, status: str | None) -> dict[str, Any]:
+        def list_documents(
+            self,
+            dataset_id: str,
+            *,
+            limit: int,
+            cursor: str | None,
+            status: str | None,
+        ) -> dict[str, Any]:
             assert dataset_id == "ds_1"
             assert limit == 2
             assert cursor is None
             assert status == "ready"
-            return {"documents": [{"id": "doc_1", "file_name": "a.md", "download_available": True}], "next_cursor": None}
+            return {
+                "documents": [
+                    {"id": "doc_1", "file_name": "a.md", "download_available": True}
+                ],
+                "next_cursor": None,
+            }
 
         def download_document(self, dataset_id: str, document_id: str) -> bytes:
             assert dataset_id == "ds_1"
             assert document_id == "doc_1"
             return b"full doc"
 
-    loader = VectorAmpLoader(client=MockClient(), dataset_id="ds_1", k=2, metadata={"loaded_by": "vectoramp"})
+    loader = VectorAmpLoader(
+        client=MockClient(),
+        dataset_id="ds_1",
+        k=2,
+        metadata={"loaded_by": "vectoramp"},
+    )
     assert loader.load() == [
-        Document(page_content="full doc", metadata={"loaded_by": "vectoramp", "id": "doc_1", "file_name": "a.md", "download_available": True}, id="doc_1")
+        Document(
+            page_content="full doc",
+            metadata={
+                "loaded_by": "vectoramp",
+                "id": "doc_1",
+                "file_name": "a.md",
+                "download_available": True,
+            },
+            id="doc_1",
+        )
     ]

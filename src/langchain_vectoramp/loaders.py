@@ -67,11 +67,15 @@ class VectorAmpLoader(BaseLoader):
 
     def _lazy_load_documents(self) -> Iterator[Document]:
         if not hasattr(self._client, "list_documents"):
-            raise ValueError("VectorAmpLoader requires query when the client cannot list documents.")
+            raise ValueError(
+                "VectorAmpLoader requires query when the client cannot list documents."
+            )
 
         cursor: Optional[str] = None
         while True:
-            page = self._client.list_documents(self.dataset_id, limit=self.k, cursor=cursor, status="ready")
+            page = self._client.list_documents(
+                self.dataset_id, limit=self.k, cursor=cursor, status="ready"
+            )
             documents = page.get("documents") or page.get("data") or page.get("items") or []
             if not documents:
                 break
@@ -85,15 +89,25 @@ class VectorAmpLoader(BaseLoader):
                     document_id = item.get("id") or item.get("document_id")
                     if document_id is None:
                         continue
-                    content = self._client.download_document(self.dataset_id, str(document_id)).decode("utf-8", errors="replace")
-                metadata = {key: value for key, value in item.items() if key not in {"text", "content", "page_content", "doc_value"}}
+                    content = self._client.download_document(
+                        self.dataset_id, str(document_id)
+                    ).decode("utf-8", errors="replace")
+                metadata = {
+                    key: value
+                    for key, value in item.items()
+                    if key not in {"text", "content", "page_content", "doc_value"}
+                }
                 if self.metadata:
                     metadata = {**self.metadata, **metadata}
                 doc_id = item.get("id") or item.get("document_id")
-                yield Document(page_content=str(content), metadata=metadata, id=str(doc_id) if doc_id is not None else None)
+                yield Document(
+                    page_content=str(content),
+                    metadata=metadata,
+                    id=str(doc_id) if doc_id is not None else None,
+                )
 
             cursor = page.get("next_cursor") or page.get("nextCursor")
-            if not cursor or len(documents) < self.k:
+            if not cursor:
                 break
 
     @staticmethod
