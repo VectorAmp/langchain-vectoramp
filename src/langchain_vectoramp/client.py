@@ -125,8 +125,9 @@ class VectorAmpHTTPClient:
             "GET",
             f"{self.base_url}/datasets/{dataset_id}/documents/{document_id}/download",
             headers=self._headers(),
+            follow_redirects=True,
         )
-        if response.status_code >= 400:
+        if response.status_code >= 300:
             raise VectorAmpClientError(
                 f"VectorAmp API error {response.status_code}: {response.text}"
             )
