@@ -1,4 +1,4 @@
-"""LangChain document loader for VectorAmp search results."""
+"""LangChain document loader for VectorAmp dataset documents or search results."""
 
 from __future__ import annotations
 
@@ -13,11 +13,12 @@ from .vectorstores import VectorAmpVectorStore
 
 
 class VectorAmpLoader(BaseLoader):
-    """Load LangChain documents from VectorAmp semantic search results.
+    """Load LangChain documents from VectorAmp retained documents or search results.
 
-    VectorAmp does not currently expose a full public dataset export/list-documents
-    endpoint. This v1 loader is intentionally search-backed: provide ``query`` to
-    load the top ``k`` matching documents from a dataset.
+    When ``query`` is omitted, the loader uses VectorAmp's public
+    ``/datasets/{id}/documents`` endpoint to iterate retained source documents.
+    When ``query`` is provided, it remains semantic-search-backed and returns the
+    top ``k`` matching documents.
     """
 
     def __init__(
@@ -48,12 +49,11 @@ class VectorAmpLoader(BaseLoader):
         )
 
     def lazy_load(self) -> Iterator[Document]:
-        """Yield documents returned by VectorAmp semantic search."""
+        """Yield retained dataset documents or semantic-search matches."""
         if not self.query:
-            raise ValueError(
-                "VectorAmpLoader v1 requires query because VectorAmp does not "
-                "currently expose a public full-dataset export endpoint."
-            )
+            yield from self._lazy_load_documents()
+            return
+
         kwargs = dict(self.search_kwargs)
         if self.filter is not None:
             kwargs["filter"] = self.filter
@@ -64,6 +64,59 @@ class VectorAmpLoader(BaseLoader):
             if self.metadata:
                 document.metadata = {**self.metadata, **document.metadata}
             yield document
+
+    def _lazy_load_documents(self) -> Iterator[Document]:
+        if not hasattr(self._client, "list_documents"):
+            raise ValueError(
+                "VectorAmpLoader requires query when the client cannot list documents."
+            )
+
+        cursor: Optional[str] = None
+        while True:
+            page = self._client.list_documents(
+                self.dataset_id, limit=self.k, cursor=cursor, status="ready"
+            )
+            documents = page.get("documents") or page.get("data") or page.get("items") or []
+            if not documents:
+                break
+            for item in documents:
+                if not isinstance(item, Mapping):
+                    continue
+                content = self._document_content(item)
+                if content is None:
+                    if not hasattr(self._client, "download_document"):
+                        continue
+                    document_id = item.get("id") or item.get("document_id")
+                    if document_id is None:
+                        continue
+                    content = self._client.download_document(
+                        self.dataset_id, str(document_id)
+                    ).decode("utf-8", errors="replace")
+                metadata = {
+                    key: value
+                    for key, value in item.items()
+                    if key not in {"text", "content", "page_content", "doc_value"}
+                }
+                if self.metadata:
+                    metadata = {**self.metadata, **metadata}
+                doc_id = item.get("id") or item.get("document_id")
+                yield Document(
+                    page_content=str(content),
+                    metadata=metadata,
+                    id=str(doc_id) if doc_id is not None else None,
+                )
+
+            cursor = page.get("next_cursor") or page.get("nextCursor")
+            if not cursor:
+                break
+
+    @staticmethod
+    def _document_content(item: Mapping[str, Any]) -> Any:
+        for key in ("text", "content", "page_content", "doc_value"):
+            value = item.get(key)
+            if value is not None:
+                return value
+        return None
 
     def load(self) -> list[Document]:
         """Return all documents from :meth:`lazy_load`."""

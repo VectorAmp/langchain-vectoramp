@@ -61,7 +61,7 @@ for document in loader.lazy_load():
     print(document.page_content)
 ```
 
-**Loader limitation:** VectorAmp does not currently expose a public full-dataset export/list-documents endpoint, so `VectorAmpLoader` v1 is semantic-search-backed. It requires an explicit `query` and returns the top `k` matching documents rather than every document in the dataset.
+`VectorAmpLoader` now uses the dataset documents API when `query` is omitted, listing retained source documents and downloading their originals. Provide `query` to keep the semantic-search-backed behavior and return the top `k` matching documents instead.
 
 ## API
 
@@ -76,7 +76,7 @@ for document in loader.lazy_load():
 
 `VectorAmpLoader` supports:
 
-- constructor args `api_key`, `base_url`, `dataset_id`, `client`, `query`, `filter`, `k`, and `metadata`
+- constructor args `api_key`, `base_url`, `dataset_id`, `client`, optional `query`, `filter`, `k`, and `metadata`
 - `load()` and idiomatic `lazy_load()`
 - the same search kwargs passthrough used by the vector store
 

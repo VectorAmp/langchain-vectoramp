@@ -106,6 +106,32 @@ class VectorAmpHTTPClient:
             "POST", f"/datasets/{dataset_id}/search", json=self._search_body(query, k, kwargs)
         )
 
+    def list_documents(
+        self,
+        dataset_id: str,
+        *,
+        limit: int = 50,
+        cursor: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> JSON:
+        return self._request(
+            "GET",
+            f"/datasets/{dataset_id}/documents",
+            params={"limit": limit, "cursor": cursor, "status": status},
+        )
+
+    def download_document(self, dataset_id: str, document_id: str) -> bytes:
+        response = self._client.request(
+            "GET",
+            f"{self.base_url}/datasets/{dataset_id}/documents/{document_id}/download",
+            headers=self._headers(),
+        )
+        if response.status_code >= 400:
+            raise VectorAmpClientError(
+                f"VectorAmp API error {response.status_code}: {response.text}"
+            )
+        return response.content
+
     async def asearch(self, dataset_id: str, query: str, *, k: int, **kwargs: Any) -> JSON:
         return await self._arequest(
             "POST", f"/datasets/{dataset_id}/search", json=self._search_body(query, k, kwargs)
