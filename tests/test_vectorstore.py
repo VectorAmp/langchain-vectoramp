@@ -280,3 +280,21 @@ def test_loader_lists_dataset_documents_without_query() -> None:
             id="doc_1",
         )
     ]
+
+
+def test_http_client_download_document_follows_redirects() -> None:
+    from langchain_vectoramp.client import VectorAmpHTTPClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/datasets/ds_1/documents/doc_1/download":
+            return httpx.Response(307, headers={"location": "https://download.test/doc_1"})
+        if str(request.url) == "https://download.test/doc_1":
+            return httpx.Response(200, content=b"full doc")
+        raise AssertionError(str(request.url))
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client = VectorAmpHTTPClient(
+        api_key="test-key", base_url="https://api.test", http_client=http_client
+    )
+
+    assert client.download_document("ds_1", "doc_1") == b"full doc"
