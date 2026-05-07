@@ -261,6 +261,9 @@ class VectorAmpHTTPClient:
 
     @staticmethod
     def _search_body(query: str, k: int, kwargs: Mapping[str, Any]) -> JSON:
+        search_text = kwargs.get("search_text")
+        if search_text is not None and search_text != query:
+            raise ValueError("Use the LangChain query argument for search text, not a separate search_text value.")
         body: JSON = {"query_text": query, "top_k": k, "include_documents": True}
         filter_value = kwargs.get("filter")
         filters_value = kwargs.get("filters")
