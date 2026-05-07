@@ -101,6 +101,14 @@ def test_similarity_search_with_filter_and_scores() -> None:
     assert score == 0.91
 
 
+def test_similarity_search_rejects_separate_search_text_knob() -> None:
+    store = VectorAmpVectorStore(api_key="test-key", dataset_id="ds_1")
+
+    with pytest.raises(ValueError, match="LangChain query argument"):
+        store.similarity_search("primary text", search_text="different text")
+
+
+
 def test_from_documents_and_retriever_with_mock_client() -> None:
     class MockDatasets:
         def __init__(self) -> None:
