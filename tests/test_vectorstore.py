@@ -53,6 +53,23 @@ def test_add_texts_uses_vectoramp_hosted_embedding_and_insert() -> None:
     }
 
 
+def test_retry_job_posts_to_ingestion_retry_endpoint() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return json_response({"job_id": "job_2", "status": "pending"})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+    store._client.base_url = "https://api.test"  # type: ignore[attr-defined]
+
+    assert store._client.retry_job("job_1") == {"job_id": "job_2", "status": "pending"}
+    assert seen == {"method": "POST", "path": "/ingestion/jobs/job_1/retry"}
+
+
 def test_similarity_search_with_filter_and_scores() -> None:
     seen: dict[str, Any] = {}
 

@@ -120,6 +120,14 @@ class VectorAmpHTTPClient:
             params={"limit": limit, "cursor": cursor, "status": status},
         )
 
+    def retry_job(self, job_id: str) -> JSON:
+        """Queue a fresh full-rerun job from an eligible failed or cancelled job."""
+        return self._request("POST", f"/ingestion/jobs/{job_id}/retry")
+
+    async def aretry_job(self, job_id: str) -> JSON:
+        """Async variant of :meth:`retry_job`."""
+        return await self._arequest("POST", f"/ingestion/jobs/{job_id}/retry")
+
     def download_document(self, dataset_id: str, document_id: str) -> bytes:
         response = self._client.request(
             "GET",
