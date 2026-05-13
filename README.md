@@ -1,5 +1,8 @@
 # langchain-vectoramp
 
+[![pipeline status](https://gitlab.com/VectorAmp/SDK/LangChain/badges/main/pipeline.svg)](https://gitlab.com/VectorAmp/SDK/LangChain/-/commits/main)
+[![coverage report](https://gitlab.com/VectorAmp/SDK/LangChain/badges/main/coverage.svg)](https://gitlab.com/VectorAmp/SDK/LangChain/-/commits/main)
+
 LangChain `VectorStore`, retriever, and loader integration for [VectorAmp](https://vectoramp.com), backed by VectorAmp-hosted embeddings and SABLE datasets.
 
 ## Installation
