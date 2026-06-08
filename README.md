@@ -27,6 +27,7 @@ docs = store.similarity_search(
     "What is VectorAmp built for?",
     k=3,
     filter={"source": "readme"},
+    rerank={"enabled": True},  # vectoramp / VectorAmp-Rerank-v1
 )
 ```
 

@@ -295,6 +295,7 @@ class VectorAmpHTTPClient:
             "include_embeddings",
             "include_documents",
             "include_metadata",
+            "rerank",
         }
         for key in passthrough:
             if key in kwargs and kwargs[key] is not None:
