@@ -99,6 +99,7 @@ def test_similarity_search_with_filter_and_scores() -> None:
         filter={"source": "docs"},
         include_metadata=True,
         hybrid=True,
+        rerank={"enabled": True},
     )
 
     assert seen["body"] == {
@@ -108,6 +109,7 @@ def test_similarity_search_with_filter_and_scores() -> None:
         "filters": {"source": "docs"},
         "include_metadata": True,
         "hybrid": True,
+        "rerank": {"enabled": True},
     }
     assert len(results) == 1
     doc, score = results[0]
