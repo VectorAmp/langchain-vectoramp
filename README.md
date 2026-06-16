@@ -42,6 +42,51 @@ retriever = store.as_retriever(
 results = retriever.invoke("find relevant docs")
 ```
 
+## Intelligence (RAG answers)
+
+`VectorAmpVectorStore` retrieves documents; `VectorAmpIntelligence` returns a
+generated answer with sources. The simplest usage needs only a question, and
+queries run across all your datasets by default:
+
+```python
+from langchain_vectoramp import VectorAmpIntelligence
+
+intel = VectorAmpIntelligence()  # uses VECTORAMP_API_KEY, all datasets, sources on
+print(intel.ask("What changed in the Q4 planning docs?"))
+```
+
+Multi-turn "just works": pass prior LangChain messages and they are forwarded as
+conversation history automatically. You control how many previous messages are
+included simply by how many you pass.
+
+```python
+from langchain_core.messages import HumanMessage, AIMessage
+
+history = [
+    HumanMessage("What is VectorAmp?"),
+    AIMessage("A vector database platform."),
+]
+intel.ask("Does it support hybrid search?", history=history)
+```
+
+It is also a `Runnable`, so it composes in LCEL chains and works with
+`RunnableWithMessageHistory` — pass a list of messages and the last one is taken
+as the question:
+
+```python
+intel.invoke("Summarize the docs")
+intel.invoke([HumanMessage("hi"), AIMessage("hello"), HumanMessage("and reranking?")])
+
+# Need sources/metadata too?
+intel.ask_with_sources("What are the contract termination terms?")
+```
+
+Scope to one dataset or tune retrieval only when you need to:
+
+```python
+VectorAmpIntelligence(dataset_name="contracts", top_k=8)
+```
+
 ## Loader
 
 ```python
