@@ -19,7 +19,7 @@ from .client import VectorAmpHTTPClient
 
 JSON = dict[str, Any]
 Turn = dict[str, str]
-Message = Union[BaseMessage, dict, str]
+Message = Union[BaseMessage, dict[str, Any], str]
 
 # LangChain message ``type`` -> Intelligence ``role``.
 _ROLE_BY_TYPE = {"human": "user", "ai": "assistant", "system": "system", "tool": "tool"}
@@ -29,21 +29,27 @@ def _content_to_text(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):  # LangChain content blocks
-        parts = [block.get("text", "") if isinstance(block, dict) else str(block) for block in content]
+        parts = [
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        ]
         return "".join(parts)
     return str(content)
 
 
 def _to_turn(message: Message) -> Turn:
     if isinstance(message, BaseMessage):
-        return {"role": _ROLE_BY_TYPE.get(message.type, "user"), "content": _content_to_text(message.content)}
+        return {
+            "role": _ROLE_BY_TYPE.get(message.type, "user"),
+            "content": _content_to_text(message.content),
+        }
     if isinstance(message, dict):
         role = message.get("role") or _ROLE_BY_TYPE.get(str(message.get("type", "")), "user")
         return {"role": role, "content": _content_to_text(message.get("content", ""))}
     return {"role": "user", "content": str(message)}
 
 
-class VectorAmpIntelligence(Runnable):
+class VectorAmpIntelligence(Runnable[Any, str]):
     """Ask VectorAmp Intelligence (RAG) from LangChain.
 
     The simplest usage needs only a question::
@@ -91,7 +97,12 @@ class VectorAmpIntelligence(Runnable):
             )
         return "all"
 
-    def _body(self, query: str, history: Optional[Sequence[Message]], overrides: dict[str, Any]) -> JSON:
+    def _body(
+        self,
+        query: str,
+        history: Optional[Sequence[Message]],
+        overrides: dict[str, Any],
+    ) -> JSON:
         body: JSON = {
             "query": query,
             "dataset_id": overrides.get("dataset_id") or self._dataset(),
@@ -106,27 +117,54 @@ class VectorAmpIntelligence(Runnable):
             body["conversation_history"] = turns
         return body
 
-    def ask(self, query: str, *, history: Optional[Sequence[Message]] = None, **overrides: Any) -> str:
+    def ask(
+        self,
+        query: str,
+        *,
+        history: Optional[Sequence[Message]] = None,
+        **overrides: Any,
+    ) -> str:
         """Ask a question and return the answer text."""
-        return str(self._client.intelligence_query(self._body(query, history, overrides)).get("answer", ""))
+        response = self._client.intelligence_query(self._body(query, history, overrides))
+        return str(response.get("answer", ""))
 
-    async def aask(self, query: str, *, history: Optional[Sequence[Message]] = None, **overrides: Any) -> str:
+    async def aask(
+        self,
+        query: str,
+        *,
+        history: Optional[Sequence[Message]] = None,
+        **overrides: Any,
+    ) -> str:
         """Async variant of :meth:`ask`."""
         data = await self._client.aintelligence_query(self._body(query, history, overrides))
         return str(data.get("answer", ""))
 
     def ask_with_sources(
-        self, query: str, *, history: Optional[Sequence[Message]] = None, **overrides: Any
+        self,
+        query: str,
+        *,
+        history: Optional[Sequence[Message]] = None,
+        **overrides: Any,
     ) -> JSON:
         """Return the full Intelligence response (answer, sources, metadata)."""
         return self._client.intelligence_query(self._body(query, history, overrides))
 
     # --- Runnable interface -------------------------------------------------
-    def invoke(self, input: Any, config: Optional[RunnableConfig] = None, **kwargs: Any) -> str:
+    def invoke(
+        self,
+        input: Any,
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Any,
+    ) -> str:
         query, history = self._split(input)
         return self.ask(query, history=history)
 
-    async def ainvoke(self, input: Any, config: Optional[RunnableConfig] = None, **kwargs: Any) -> str:
+    async def ainvoke(
+        self,
+        input: Any,
+        config: Optional[RunnableConfig] = None,
+        **kwargs: Any,
+    ) -> str:
         query, history = self._split(input)
         return await self.aask(query, history=history)
 
@@ -134,14 +172,17 @@ class VectorAmpIntelligence(Runnable):
     def _split(input: Any) -> tuple[str, list[Message]]:
         """Normalize Runnable input into (query, history).
 
-        Accepts a plain string, a dict ({query|question|input, history|chat_history|messages}),
-        or a sequence of messages where the last one is the question.
+        Accepts a plain string, a dict
+        ({query|question|input, history|chat_history|messages}), or a sequence of
+        messages where the last one is the question.
         """
         if isinstance(input, str):
             return input, []
         if isinstance(input, dict):
             query = input.get("query") or input.get("question") or input.get("input") or ""
-            history = list(input.get("history") or input.get("chat_history") or input.get("messages") or [])
+            history = list(
+                input.get("history") or input.get("chat_history") or input.get("messages") or []
+            )
             if not query and history:
                 last = history.pop()
                 return _to_turn(last)["content"], history
