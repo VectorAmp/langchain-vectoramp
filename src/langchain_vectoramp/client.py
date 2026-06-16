@@ -106,6 +106,14 @@ class VectorAmpHTTPClient:
             "POST", f"/datasets/{dataset_id}/search", json=self._search_body(query, k, kwargs)
         )
 
+    def intelligence_query(self, body: Mapping[str, Any]) -> JSON:
+        """POST an Intelligence/RAG query and return the JSON answer."""
+        return self._request("POST", "/intelligence/query", json=dict(body))
+
+    async def aintelligence_query(self, body: Mapping[str, Any]) -> JSON:
+        """Async variant of :meth:`intelligence_query`."""
+        return await self._arequest("POST", "/intelligence/query", json=dict(body))
+
     def list_documents(
         self,
         dataset_id: str,
