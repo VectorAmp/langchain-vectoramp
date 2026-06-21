@@ -13,6 +13,10 @@ JSON = dict[str, Any]
 FilterValue = Union[str, int, float, bool, None]
 Filters = Mapping[str, FilterValue]
 
+# A vector record id may be a string or an integer. Integer ids must round-trip
+# to the API as JSON numbers (not strings), otherwise the server rewrites them.
+VectorId = Union[str, int]
+
 
 class VectorAmpClientError(RuntimeError):
     """Raised when the VectorAmp API returns an error."""
@@ -80,9 +84,9 @@ class VectorAmpHTTPClient:
         dataset_id: str,
         texts: Sequence[str],
         *,
-        ids: Optional[Sequence[str]] = None,
+        ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
-    ) -> list[str]:
+    ) -> list[VectorId]:
         embeddings = self._embed(dataset_id, texts)
         vector_ids = self._build_ids(texts, ids)
         self._insert_vectors(dataset_id, texts, embeddings, vector_ids, metadatas)
@@ -93,9 +97,9 @@ class VectorAmpHTTPClient:
         dataset_id: str,
         texts: Sequence[str],
         *,
-        ids: Optional[Sequence[str]] = None,
+        ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
-    ) -> list[str]:
+    ) -> list[VectorId]:
         embeddings = await self._aembed(dataset_id, texts)
         vector_ids = self._build_ids(texts, ids)
         await self._ainsert_vectors(dataset_id, texts, embeddings, vector_ids, metadatas)
@@ -171,7 +175,7 @@ class VectorAmpHTTPClient:
         dataset_id: str,
         texts: Sequence[str],
         embeddings: Sequence[Sequence[float]],
-        ids: Sequence[str],
+        ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
     ) -> JSON:
         return self._request(
@@ -185,7 +189,7 @@ class VectorAmpHTTPClient:
         dataset_id: str,
         texts: Sequence[str],
         embeddings: Sequence[Sequence[float]],
-        ids: Sequence[str],
+        ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
     ) -> JSON:
         return await self._arequest(
@@ -252,18 +256,24 @@ class VectorAmpHTTPClient:
         return embeddings
 
     @staticmethod
-    def _build_ids(texts: Sequence[str], ids: Optional[Sequence[str]]) -> list[str]:
+    def _build_ids(texts: Sequence[str], ids: Optional[Sequence[VectorId]]) -> list[VectorId]:
         if ids is not None:
             if len(ids) != len(texts):
                 raise ValueError("ids length must match texts length.")
-            return [str(value) for value in ids]
+            # Preserve the caller's id types. Integer ids stay integers so they
+            # serialize as JSON numbers; everything else is coerced to a string.
+            # (bool is a subclass of int but is not a valid id, so it is excluded.)
+            return [
+                value if isinstance(value, int) and not isinstance(value, bool) else str(value)
+                for value in ids
+            ]
         return [str(uuid.uuid4()) for _ in texts]
 
     @staticmethod
     def _vectors(
         texts: Sequence[str],
         embeddings: Sequence[Sequence[float]],
-        ids: Sequence[str],
+        ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
     ) -> list[JSON]:
         if metadatas is not None and len(metadatas) != len(texts):
@@ -272,11 +282,16 @@ class VectorAmpHTTPClient:
         for index, (text, values) in enumerate(zip(texts, embeddings, strict=True)):
             metadata = dict(metadatas[index]) if metadatas is not None else {}
             metadata.setdefault("text", text)
+            # ``ids[index]`` keeps its original type (int stays int -> JSON number,
+            # str stays str) so the API never rewrites integer ids.
             vectors.append({"id": ids[index], "values": list(values), "metadata": metadata})
         return vectors
 
     @staticmethod
     def _search_body(query: str, k: int, kwargs: Mapping[str, Any]) -> JSON:
+        # Metadata filters accept ``filter`` (preferred, LangChain convention) or
+        # ``filters`` (SDK parity). Both map to the API's ``filters`` field; pass
+        # only one.
         search_text = kwargs.get("search_text")
         if search_text is not None and search_text != query:
             raise ValueError(
@@ -308,4 +323,11 @@ class VectorAmpHTTPClient:
         for key in passthrough:
             if key in kwargs and kwargs[key] is not None:
                 body[key] = kwargs[key]
+        # Ergonomic: ``rerank=True`` expands to the full VectorAmp rerank object.
+        if body.get("rerank") is True:
+            body["rerank"] = {
+                "enabled": True,
+                "provider": "vectoramp",
+                "model": "VectorAmp-Rerank-v1",
+            }
         return body

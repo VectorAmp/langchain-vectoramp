@@ -10,7 +10,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
-from .client import VectorAmpHTTPClient
+from .client import VectorAmpHTTPClient, VectorId
 
 VST = TypeVar("VST", bound="VectorAmpVectorStore")
 
@@ -60,7 +60,13 @@ class VectorAmpVectorStore(VectorStore):
         ids: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> list[str]:
-        """Embed texts with VectorAmp's hosted model and add them to the dataset."""
+        """Embed texts with VectorAmp's hosted model and add them to the dataset.
+
+        The static type follows the LangChain ``VectorStore`` contract (string
+        ids), but at runtime ``ids`` also accepts integers: integer ids are
+        preserved and serialized as JSON numbers so the server never rewrites
+        them. The returned list mirrors the ids that were stored.
+        """
         text_list = list(texts)
         if not text_list:
             return []
@@ -70,10 +76,19 @@ class VectorAmpVectorStore(VectorStore):
             # dropping unsupported write options.
             unsupported = ", ".join(sorted(kwargs))
             raise TypeError(f"Unsupported add_texts kwargs: {unsupported}")
-        return self._add_texts(text_list, ids=add_ids, metadatas=metadatas)
+        # _add_texts preserves integer ids at runtime; the public type follows
+        # the LangChain string-id contract.
+        return cast(list[str], self._add_texts(text_list, ids=add_ids, metadatas=metadatas))
 
     def similarity_search(self, query: str, k: int = 4, **kwargs: Any) -> list[Document]:
-        """Return documents most similar to ``query``."""
+        """Return documents most similar to ``query``.
+
+        Metadata filtering uses ``filter={...}`` (the LangChain convention and
+        the preferred form here). ``filters={...}`` is also accepted for parity
+        with the other VectorAmp SDKs, but pass only one of the two. Additional
+        VectorAmp-native search options (``hybrid``, ``sparse_query``, ``alpha``,
+        ``rerank``, ``advanced_filters``, ...) may be passed as keyword args.
+        """
         return [
             document for document, _score in self.similarity_search_with_score(query, k=k, **kwargs)
         ]
@@ -81,7 +96,10 @@ class VectorAmpVectorStore(VectorStore):
     def similarity_search_with_score(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> list[tuple[Document, float]]:
-        """Return documents and VectorAmp scores for the text query."""
+        """Return documents and VectorAmp scores for the text query.
+
+        Accepts the same keyword arguments as :meth:`similarity_search`.
+        """
         response = self._search(query, k=k, **kwargs)
         return self._documents_from_search_response(response)
 
@@ -93,7 +111,7 @@ class VectorAmpVectorStore(VectorStore):
         ids: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> list[str]:
-        """Async variant of :meth:`add_texts`."""
+        """Async variant of :meth:`add_texts` (integer ids preserved at runtime)."""
         text_list = list(texts)
         if not text_list:
             return []
@@ -102,10 +120,18 @@ class VectorAmpVectorStore(VectorStore):
             unsupported = ", ".join(sorted(kwargs))
             raise TypeError(f"Unsupported aadd_texts kwargs: {unsupported}")
         if hasattr(self._client, "aadd_texts"):
-            return await self._client.aadd_texts(
-                self.dataset_id, text_list, ids=add_ids, metadatas=metadatas
+            return cast(
+                list[str],
+                await self._client.aadd_texts(
+                    self.dataset_id, text_list, ids=add_ids, metadatas=metadatas
+                ),
             )
-        return await asyncio.to_thread(self._add_texts, text_list, ids=add_ids, metadatas=metadatas)
+        return cast(
+            list[str],
+            await asyncio.to_thread(
+                self._add_texts, text_list, ids=add_ids, metadatas=metadatas
+            ),
+        )
 
     async def asimilarity_search(self, query: str, k: int = 4, **kwargs: Any) -> list[Document]:
         """Async variant of :meth:`similarity_search`."""
@@ -192,18 +218,18 @@ class VectorAmpVectorStore(VectorStore):
         self,
         texts: Sequence[str],
         *,
-        ids: Optional[Sequence[str]],
+        ids: Optional[Sequence[VectorId]],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
-    ) -> list[str]:
+    ) -> list[VectorId]:
         if hasattr(self._client, "add_texts"):
             return self._client.add_texts(self.dataset_id, texts, ids=ids, metadatas=metadatas)
         client = cast(Any, self._client)
         result = client.datasets.add_texts(self.dataset_id, texts, ids=ids, metadatas=metadatas)
         if ids is not None:
-            return [str(value) for value in ids]
+            return list(ids)
         inserted_ids = result.get("ids") or result.get("vector_ids") or result.get("inserted_ids")
         if isinstance(inserted_ids, list):
-            return [str(value) for value in inserted_ids]
+            return list(inserted_ids)
         raise ValueError("Client add_texts response did not include inserted ids.")
 
     def _search(self, query: str, *, k: int, **kwargs: Any) -> Mapping[str, Any]:

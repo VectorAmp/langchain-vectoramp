@@ -8,12 +8,14 @@ version = "0.1.0"
 description = "LangChain VectorStore integration for VectorAmp"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "VectorAmp" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "VectorAmp, Inc." }]
 keywords = ["vectoramp", "langchain", "vectorstore", "rag", "sable"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -38,7 +40,8 @@ dev = [
 [project.urls]
 Homepage = "https://vectoramp.com"
 Documentation = "https://docs.vectoramp.com"
-Repository = "https://gitlab.com/VectorAmp/SDK/LangChain"
+Repository = "https://github.com/vectoramp/langchain-vectoramp"
+Issues = "https://github.com/vectoramp/langchain-vectoramp/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/langchain_vectoramp"]
