@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 import httpx
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from langchain_vectoramp import VectorAmpIntelligence
@@ -81,3 +82,13 @@ def test_ask_with_sources_returns_full_payload() -> None:
 
     assert result["sources"] == [{"title": "doc"}]
     assert calls[0]["body"]["top_k"] == 7
+
+
+def test_intelligence_minimal_init_reads_api_key_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Minimal init: no api_key argument, no dataset -> env key + "all" datasets.
+    monkeypatch.setenv("VECTORAMP_API_KEY", "env-key")
+    intel = VectorAmpIntelligence()
+    assert intel._client.api_key == "env-key"  # type: ignore[attr-defined]
+    assert intel._dataset() == "all"  # type: ignore[attr-defined]

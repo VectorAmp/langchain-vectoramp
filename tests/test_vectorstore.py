@@ -53,6 +53,91 @@ def test_add_texts_uses_vectoramp_hosted_embedding_and_insert() -> None:
     }
 
 
+def test_add_texts_preserves_integer_ids_as_json_numbers() -> None:
+    insert_body: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/datasets/ds_1/embed":
+            return json_response({"embeddings": [[0.1], [0.2]]})
+        if request.url.path == "/datasets/ds_1/insert":
+            insert_body.update(json.loads(request.content))
+            return json_response({"inserted": 2})
+        raise AssertionError(str(request.url))
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+
+    returned = store.add_texts(["a", "b"], ids=[1, 2])
+
+    # Ids returned to the caller keep their integer type...
+    assert returned == [1, 2]
+    assert all(isinstance(value, int) for value in returned)
+    # ...and the raw request bytes carry JSON numbers, not quoted strings.
+    raw = json.dumps(insert_body)
+    assert '"id": 1' in raw
+    assert '"id": 2' in raw
+    assert '"id": "1"' not in raw
+    assert insert_body["vectors"][0]["id"] == 1
+    assert insert_body["vectors"][1]["id"] == 2
+
+
+def test_add_texts_keeps_string_ids_as_strings() -> None:
+    insert_body: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/datasets/ds_1/embed":
+            return json_response({"embeddings": [[0.1]]})
+        if request.url.path == "/datasets/ds_1/insert":
+            insert_body.update(json.loads(request.content))
+            return json_response({"inserted": 1})
+        raise AssertionError(str(request.url))
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+
+    returned = store.add_texts(["a"], ids=["doc-a"])
+    assert returned == ["doc-a"]
+    assert insert_body["vectors"][0]["id"] == "doc-a"
+
+
+def test_similarity_search_expands_rerank_true_to_full_object() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"results": []})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+
+    store.similarity_search("q", k=2, rerank=True)
+
+    assert seen["body"]["rerank"] == {
+        "enabled": True,
+        "provider": "vectoramp",
+        "model": "VectorAmp-Rerank-v1",
+    }
+
+
+def test_similarity_search_filters_alias_matches_filter() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return json_response({"results": []})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+
+    # The ``filters`` alias maps to the same API ``filters`` field as ``filter``.
+    store.similarity_search("q", k=1, filters={"tenant": "acme"})
+    assert seen["body"]["filters"] == {"tenant": "acme"}
+
+
 def test_retry_job_posts_to_ingestion_retry_endpoint() -> None:
     seen: dict[str, Any] = {}
 
@@ -189,6 +274,31 @@ async def test_async_add_and_search() -> None:
     docs = await store.asimilarity_search("async", k=1, filter={"kind": "async"})
     assert docs == [Document(page_content="async doc", metadata={"id": "v1"}, id="v1")]
     await async_client.aclose()
+
+
+def test_minimal_init_reads_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Minimal init: only the dataset is named; the key comes from the environment.
+    monkeypatch.setenv("VECTORAMP_API_KEY", "env-key")
+    store = VectorAmpVectorStore(dataset_id="ds_1")
+    assert store._client.api_key == "env-key"  # type: ignore[attr-defined]
+    assert store._client.base_url == "https://api.vectoramp.com"  # type: ignore[attr-defined]
+
+
+def test_embedding_argument_is_accepted_but_ignored() -> None:
+    class SentinelEmbeddings:
+        # Not a real Embeddings impl; it must never be called for add/search.
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            raise AssertionError("VectorAmp embeds server-side; embedding must be ignored.")
+
+        def embed_query(self, text: str) -> list[float]:
+            raise AssertionError("VectorAmp embeds server-side; embedding must be ignored.")
+
+    sentinel = SentinelEmbeddings()
+    store = VectorAmpVectorStore(
+        api_key="test-key", dataset_id="ds_1", embedding=sentinel  # type: ignore[arg-type]
+    )
+    # Exposed via the LangChain ``embeddings`` property, but never invoked.
+    assert store.embeddings is sentinel
 
 
 def test_dataset_name_resolution() -> None:
