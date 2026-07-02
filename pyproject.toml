@@ -40,8 +40,8 @@ dev = [
 [project.urls]
 Homepage = "https://vectoramp.com"
 Documentation = "https://docs.vectoramp.com"
-Repository = "https://github.com/vectoramp/langchain-vectoramp"
-Issues = "https://github.com/vectoramp/langchain-vectoramp/issues"
+Repository = "https://github.com/VectorAmp/langchain-vectoramp"
+Issues = "https://github.com/VectorAmp/langchain-vectoramp/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/langchain_vectoramp"]
