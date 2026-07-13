@@ -148,6 +148,41 @@ class VectorAmpVectorStore(VectorStore):
             response = await asyncio.to_thread(self._search, query, k=k, **kwargs)
         return self._documents_from_search_response(response)
 
+    def delete(self, ids: Optional[list[str]] = None, **kwargs: Any) -> Optional[bool]:
+        """Delete vectors by id from the VectorAmp dataset."""
+        delete_ids = kwargs.pop("ids", ids)
+        if kwargs:
+            unsupported = ", ".join(sorted(kwargs))
+            raise TypeError(f"Unsupported delete kwargs: {unsupported}")
+        if delete_ids is None:
+            raise ValueError("ids is required.")
+        if not delete_ids:
+            return True
+        if hasattr(self._client, "delete_vectors"):
+            self._client.delete_vectors(self.dataset_id, delete_ids)
+        else:
+            client = cast(Any, self._client)
+            client.datasets.delete_vectors(self.dataset_id, delete_ids)
+        return True
+
+    async def adelete(
+        self, ids: Optional[list[str]] = None, **kwargs: Any
+    ) -> Optional[bool]:
+        """Async variant of :meth:`delete`."""
+        delete_ids = kwargs.pop("ids", ids)
+        if kwargs:
+            unsupported = ", ".join(sorted(kwargs))
+            raise TypeError(f"Unsupported adelete kwargs: {unsupported}")
+        if delete_ids is None:
+            raise ValueError("ids is required.")
+        if not delete_ids:
+            return True
+        if hasattr(self._client, "adelete_vectors"):
+            await self._client.adelete_vectors(self.dataset_id, delete_ids)
+        else:
+            await asyncio.to_thread(self.delete, ids=delete_ids)
+        return True
+
     @classmethod
     def from_texts(
         cls: type[VST],

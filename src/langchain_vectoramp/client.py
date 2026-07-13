@@ -110,6 +110,20 @@ class VectorAmpHTTPClient:
             "POST", f"/datasets/{dataset_id}/search", json=self._search_body(query, k, kwargs)
         )
 
+    def delete_vectors(self, dataset_id: str, ids: Sequence[VectorId]) -> JSON:
+        if not ids:
+            raise ValueError("ids must contain at least one vector id.")
+        return self._request(
+            "DELETE", f"/api/v1/datasets/{dataset_id}/vectors", json={"ids": list(ids)}
+        )
+
+    async def adelete_vectors(self, dataset_id: str, ids: Sequence[VectorId]) -> JSON:
+        if not ids:
+            raise ValueError("ids must contain at least one vector id.")
+        return await self._arequest(
+            "DELETE", f"/api/v1/datasets/{dataset_id}/vectors", json={"ids": list(ids)}
+        )
+
     def intelligence_query(self, body: Mapping[str, Any]) -> JSON:
         """POST an Intelligence/RAG query and return the JSON answer."""
         return self._request("POST", "/intelligence/query", json=dict(body))
