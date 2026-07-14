@@ -102,6 +102,33 @@ def test_add_texts_keeps_string_ids_as_strings() -> None:
     assert insert_body["vectors"][0]["id"] == "doc-a"
 
 
+def test_delete_vectors_posts_delete_endpoint() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return json_response({"deleted": 2})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._client = http_client  # type: ignore[attr-defined]
+
+    assert store.delete(ids=["a", "b"]) is True
+    assert seen == {
+        "method": "DELETE",
+        "path": "/api/v1/datasets/ds_1/vectors",
+        "body": {"ids": ["a", "b"]},
+    }
+
+
+def test_delete_requires_ids() -> None:
+    store = VectorAmpVectorStore(api_key="test-key", dataset_id="ds_1")
+    with pytest.raises(ValueError):
+        store.delete()
+
+
 def test_similarity_search_expands_rerank_true_to_full_object() -> None:
     seen: dict[str, Any] = {}
 
@@ -246,6 +273,29 @@ def test_from_documents_and_retriever_with_mock_client() -> None:
     ]
     retriever = store.as_retriever(search_kwargs={"k": 1, "filter": {"tenant": "acme"}})
     assert retriever.invoke("alpha")[0].page_content == "alpha"
+
+
+@pytest.mark.asyncio
+async def test_async_delete_vectors_posts_delete_endpoint() -> None:
+    seen: dict[str, Any] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return json_response({"deleted": 1})
+
+    async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
+    store._client._async_client = async_client  # type: ignore[attr-defined]
+
+    assert await store.adelete(ids=["async-id"]) is True
+    assert seen == {
+        "method": "DELETE",
+        "path": "/api/v1/datasets/ds_1/vectors",
+        "body": {"ids": ["async-id"]},
+    }
+    await async_client.aclose()
 
 
 @pytest.mark.asyncio

@@ -63,6 +63,9 @@ JSON numbers, so the server stores exactly what you passed:
 ```python
 store.add_texts(["a", "b"], ids=[1, 2])      # -> [1, 2], stored as numbers
 store.add_texts(["c"], ids=["doc-c"])        # -> ["doc-c"]
+
+# Delete vectors by id through the LangChain VectorStore API.
+store.delete(ids=["doc-c"])
 ```
 
 ## Retriever
@@ -185,6 +188,8 @@ VectorAmpVectorStore(
 | `similarity_search_with_score(query, k=4, **kwargs)` | `query` | same as above | `list[tuple[Document, float]]` |
 | `asimilarity_search(query, k=4, **kwargs)` | `query` | same as above | `list[Document]` |
 | `asimilarity_search_with_score(query, k=4, **kwargs)` | `query` | same as above | `list[tuple[Document, float]]` |
+| `delete(ids=[...])` | `ids` | — | `True` |
+| `adelete(ids=[...])` | `ids` | — | `True` |
 | `as_retriever(**kwargs)` | — | `search_kwargs` (e.g. `{"k": 5, "filter": {...}}`), `search_type` | `VectorStoreRetriever` (inherited) |
 | `from_texts(texts, embedding=None, metadatas=None, *, ids=None, **kwargs)` *(classmethod)* | `texts`, plus `dataset_id` or `dataset_name` in `kwargs` | `embedding` (ignored), `metadatas`, `ids` | `VectorAmpVectorStore` |
 | `from_documents(documents, embedding=None, **kwargs)` *(classmethod)* | `documents`, plus `dataset_id` or `dataset_name` | `embedding` (ignored) | `VectorAmpVectorStore` |
