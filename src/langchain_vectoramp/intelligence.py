@@ -49,6 +49,27 @@ def _to_turn(message: Message) -> Turn:
     return {"role": "user", "content": str(message)}
 
 
+def _as_list(value: Union[None, str, Sequence[str]]) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
+
+def _normalize_dataset_ids(dataset_ids: Union[None, str, Sequence[str]]) -> list[str]:
+    """Drop blanks and the retired ``"all"`` sentinel from a dataset scope.
+
+    ``"all"`` used to be the way to ask across everything; that is now spelled by
+    omitting ``dataset_ids`` entirely, and the API filters the sentinel out anyway.
+    """
+    return [
+        str(d).strip()
+        for d in _as_list(dataset_ids)
+        if str(d).strip() and str(d).strip() != "all"
+    ]
+
+
 class VectorAmpIntelligence(Runnable[Any, str]):
     """Ask VectorAmp Intelligence (RAG) from LangChain.
 
@@ -56,6 +77,12 @@ class VectorAmpIntelligence(Runnable[Any, str]):
 
         intel = VectorAmpIntelligence()          # uses VECTORAMP_API_KEY, all datasets
         print(intel.ask("What changed in Q4 planning?"))
+
+    Scope a question to one or more datasets with ``dataset_ids`` (or
+    ``dataset_names``); leave them unset to search everything the key can see::
+
+        intel = VectorAmpIntelligence(dataset_ids=["ds_contracts", "ds_invoices"])
+        print(intel.ask("Which contracts renew in Q4?"))
 
     Multi-turn follow-ups: pass prior LangChain messages (or plain dicts); they
     are forwarded as ``conversation_history`` automatically::
@@ -77,6 +104,8 @@ class VectorAmpIntelligence(Runnable[Any, str]):
         *,
         dataset_id: Optional[str] = None,
         dataset_name: Optional[str] = None,
+        dataset_ids: Optional[Sequence[str]] = None,
+        dataset_names: Optional[Sequence[str]] = None,
         api_key: Optional[str] = None,
         base_url: str = "https://api.vectoramp.com",
         client: Optional[VectorAmpHTTPClient] = None,
@@ -84,18 +113,25 @@ class VectorAmpIntelligence(Runnable[Any, str]):
         include_sources: bool = True,
     ) -> None:
         self._client = client or VectorAmpHTTPClient(api_key=api_key, base_url=base_url)
-        self._dataset_id = dataset_id
-        self._dataset_name = dataset_name
+        # Singular and plural are both accepted and merged: the singular forms are
+        # the natural spelling for the common one-dataset case, and both end up in
+        # the same dataset_ids list on the wire.
+        self._dataset_ids = [*_as_list(dataset_id), *_as_list(dataset_ids)]
+        self._dataset_names = [*_as_list(dataset_name), *_as_list(dataset_names)]
         self._top_k = top_k
         self._include_sources = include_sources
 
-    def _dataset(self) -> str:
-        # Default to every accessible dataset; only resolve a name/id when given.
-        if self._dataset_id or self._dataset_name:
-            return self._client.get_dataset_id(
-                dataset_id=self._dataset_id, dataset_name=self._dataset_name
-            )
-        return "all"
+    def _datasets(self) -> list[str]:
+        """The configured scope, as dataset ids.
+
+        An empty list means "every dataset the caller can see", which is what an
+        absent ``dataset_ids`` says to the API. Names are resolved to ids only
+        when given, so the default costs no extra request.
+        """
+        scope = list(self._dataset_ids)
+        for name in self._dataset_names:
+            scope.append(self._client.get_dataset_id(dataset_id=None, dataset_name=name))
+        return _normalize_dataset_ids(scope)
 
     def _body(
         self,
@@ -103,12 +139,24 @@ class VectorAmpIntelligence(Runnable[Any, str]):
         history: Optional[Sequence[Message]],
         overrides: dict[str, Any],
     ) -> JSON:
+        if "dataset_id" in overrides:
+            raise TypeError(
+                "dataset_id is retired. Pass dataset_ids=[...], or omit it to search "
+                "every dataset you can see."
+            )
         body: JSON = {
             "query": query,
-            "dataset_id": overrides.get("dataset_id") or self._dataset(),
             "include_sources": overrides.get("include_sources", self._include_sources),
             "stream": False,
         }
+        scope = (
+            _normalize_dataset_ids(overrides["dataset_ids"])
+            if "dataset_ids" in overrides
+            else self._datasets()
+        )
+        # Omitted, not empty: an absent field is how the API says "every dataset".
+        if scope:
+            body["dataset_ids"] = scope
         top_k = overrides.get("top_k", self._top_k)
         if top_k is not None:
             body["top_k"] = top_k
