@@ -119,10 +119,17 @@ intel.invoke([HumanMessage("hi"), AIMessage("hello"), HumanMessage("and rerankin
 intel.ask_with_sources("What are the contract termination terms?")
 ```
 
-Scope to one dataset or tune retrieval only when you need to:
+Scope to one or more datasets, or tune retrieval, only when you need to:
 
 ```python
 intel = VectorAmpIntelligence(dataset_name="contracts", top_k=8)
+
+# Several datasets, by id or by name:
+intel = VectorAmpIntelligence(dataset_ids=["ds_contracts", "ds_invoices"])
+intel = VectorAmpIntelligence(dataset_names=["contracts", "invoices"])
+
+# Or per call:
+intel.ask("Which contracts renew in Q4?", dataset_ids=["ds_contracts", "ds_invoices"])
 ```
 
 ## Loader
@@ -209,8 +216,10 @@ Constructor:
 ```python
 VectorAmpIntelligence(
     *,
-    dataset_id: str | None = None,     # default: query across all datasets ("all")
+    dataset_id: str | None = None,         # unset: query across every visible dataset
     dataset_name: str | None = None,
+    dataset_ids: Sequence[str] | None = None,    # merged with dataset_id
+    dataset_names: Sequence[str] | None = None,  # merged with dataset_name
     api_key: str | None = None,        # default: env VECTORAMP_API_KEY
     base_url: str = "https://api.vectoramp.com",
     client: VectorAmpHTTPClient | None = None,
@@ -221,7 +230,7 @@ VectorAmpIntelligence(
 
 | Method | Required | Optional (defaults) | Returns |
 |---|---|---|---|
-| `ask(query, *, history=None, **overrides)` | `query` | `history`, `dataset_id`, `include_sources`, `top_k` | `str` answer |
+| `ask(query, *, history=None, **overrides)` | `query` | `history`, `dataset_ids`, `include_sources`, `top_k` | `str` answer |
 | `aask(query, *, history=None, **overrides)` | `query` | same as `ask` | `str` |
 | `ask_with_sources(query, *, history=None, **overrides)` | `query` | same as `ask` | `dict` (answer, sources, metadata) |
 | `invoke(input, config=None, **kwargs)` | `input` | — | `str` |
