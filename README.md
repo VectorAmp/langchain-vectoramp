@@ -1,9 +1,9 @@
 <div align="center">
   <a href="https://vectoramp.com/">
     <picture>
-      <source media="(prefers-color-scheme: light)" srcset="https://vectoramp.com/logo-full-light.svg">
-      <source media="(prefers-color-scheme: dark)" srcset="https://vectoramp.com/logo-full-dark.svg">
-      <img alt="VectorAmp Logo" src="https://vectoramp.com/logo-full-dark.svg" width="50%">
+      <source media="(prefers-color-scheme: light)" srcset="assets/logo-full-light.svg">
+      <source media="(prefers-color-scheme: dark)" srcset="assets/logo-full-dark.svg">
+      <img alt="VectorAmp Logo" src="assets/logo-full-dark.svg" width="50%">
     </picture>
   </a>
 </div>
@@ -281,4 +281,3 @@ Tests use mocked clients/transports only; no live VectorAmp API calls are made.
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
