@@ -35,6 +35,7 @@ def test_add_texts_uses_vectoramp_hosted_embedding_and_insert() -> None:
         dataset_id="ds_1",
         client=None,
         timeout=1,
+        security_scope_key="tenant-acme",
     )
     # Inject the mock after construction so constructor behavior stays simple.
     store._client._client = http_client  # type: ignore[attr-defined]
@@ -47,8 +48,18 @@ def test_add_texts_uses_vectoramp_hosted_embedding_and_insert() -> None:
     insert_body = calls[1][2]
     assert insert_body == {
         "vectors": [
-            {"id": "a", "values": [0.1, 0.2], "metadata": {"kind": "greeting", "text": "hello"}},
-            {"id": "b", "values": [0.3, 0.4], "metadata": {"kind": "noun", "text": "world"}},
+            {
+                "id": "a",
+                "values": [0.1, 0.2],
+                "metadata": {"kind": "greeting", "text": "hello"},
+                "security_scope_key": "tenant-acme",
+            },
+            {
+                "id": "b",
+                "values": [0.3, 0.4],
+                "metadata": {"kind": "noun", "text": "world"},
+                "security_scope_key": "tenant-acme",
+            },
         ]
     }
 
@@ -80,6 +91,7 @@ def test_add_texts_preserves_integer_ids_as_json_numbers() -> None:
     assert '"id": "1"' not in raw
     assert insert_body["vectors"][0]["id"] == 1
     assert insert_body["vectors"][1]["id"] == 2
+    assert "security_scope_key" not in insert_body["vectors"][0]
 
 
 def test_add_texts_keeps_string_ids_as_strings() -> None:
@@ -261,7 +273,12 @@ def test_from_documents_and_retriever_with_mock_client() -> None:
     client = MockClient()
     docs = [Document(page_content="alpha", metadata={"tenant": "acme"}, id="doc-1")]
 
-    store = VectorAmpVectorStore.from_documents(docs, client=client, dataset_id="ds_1")
+    store = VectorAmpVectorStore.from_documents(
+        docs,
+        client=client,
+        dataset_id="ds_1",
+        security_scope_key="tenant-acme",
+    )
 
     assert client.datasets.add_calls == [
         {
@@ -269,6 +286,7 @@ def test_from_documents_and_retriever_with_mock_client() -> None:
             "texts": ["alpha"],
             "ids": ["doc-1"],
             "metadatas": [{"tenant": "acme"}],
+            "security_scope_key": "tenant-acme",
         }
     ]
     retriever = store.as_retriever(search_kwargs={"k": 1, "filter": {"tenant": "acme"}})
@@ -306,6 +324,7 @@ async def test_async_add_and_search() -> None:
             return json_response({"embeddings": [[0.1]]})
         if request.url.path == "/datasets/ds_1/insert":
             assert body["vectors"][0]["id"] == "async-id"
+            assert body["vectors"][0]["security_scope_key"] == "tenant-async"
             return json_response({"inserted": 1})
         if request.url.path == "/datasets/ds_1/search":
             assert body["filters"] == {"kind": "async"}
@@ -320,7 +339,9 @@ async def test_async_add_and_search() -> None:
     store = VectorAmpVectorStore(api_key="test-key", base_url="https://api.test", dataset_id="ds_1")
     store._client._async_client = async_client  # type: ignore[attr-defined]
 
-    assert await store.aadd_texts(["async"], ids=["async-id"]) == ["async-id"]
+    assert await store.aadd_texts(
+        ["async"], ids=["async-id"], security_scope_key="tenant-async"
+    ) == ["async-id"]
     docs = await store.asimilarity_search("async", k=1, filter={"kind": "async"})
     assert docs == [Document(page_content="async doc", metadata={"id": "v1"}, id="v1")]
     await async_client.aclose()

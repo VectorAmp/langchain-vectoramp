@@ -34,6 +34,7 @@ class VectorAmpVectorStore(VectorStore):
         client: Optional[Any] = None,
         embedding: Optional[Embeddings] = None,
         timeout: float = 30.0,
+        security_scope_key: Optional[str] = None,
     ) -> None:
         if dataset_id and dataset_name:
             raise ValueError("Provide only one of dataset_id or dataset_name.")
@@ -44,6 +45,7 @@ class VectorAmpVectorStore(VectorStore):
             timeout=timeout,
         )
         self.embedding = embedding
+        self.security_scope_key = security_scope_key
         self.dataset_name = dataset_name
         self.dataset_id = self._resolve_dataset_id(dataset_id=dataset_id, dataset_name=dataset_name)
 
@@ -58,6 +60,7 @@ class VectorAmpVectorStore(VectorStore):
         metadatas: Optional[list[dict[str, Any]]] = None,
         *,
         ids: Optional[list[str]] = None,
+        security_scope_key: Optional[str] = None,
         **kwargs: Any,
     ) -> list[str]:
         """Embed texts with VectorAmp's hosted model and add them to the dataset.
@@ -78,7 +81,15 @@ class VectorAmpVectorStore(VectorStore):
             raise TypeError(f"Unsupported add_texts kwargs: {unsupported}")
         # _add_texts preserves integer ids at runtime; the public type follows
         # the LangChain string-id contract.
-        return cast(list[str], self._add_texts(text_list, ids=add_ids, metadatas=metadatas))
+        return cast(
+            list[str],
+            self._add_texts(
+                text_list,
+                ids=add_ids,
+                metadatas=metadatas,
+                security_scope_key=security_scope_key,
+            ),
+        )
 
     def similarity_search(self, query: str, k: int = 4, **kwargs: Any) -> list[Document]:
         """Return documents most similar to ``query``.
@@ -109,6 +120,7 @@ class VectorAmpVectorStore(VectorStore):
         metadatas: Optional[list[dict[str, Any]]] = None,
         *,
         ids: Optional[list[str]] = None,
+        security_scope_key: Optional[str] = None,
         **kwargs: Any,
     ) -> list[str]:
         """Async variant of :meth:`add_texts` (integer ids preserved at runtime)."""
@@ -120,16 +132,34 @@ class VectorAmpVectorStore(VectorStore):
             unsupported = ", ".join(sorted(kwargs))
             raise TypeError(f"Unsupported aadd_texts kwargs: {unsupported}")
         if hasattr(self._client, "aadd_texts"):
+            resolved_scope_key = (
+                self.security_scope_key
+                if security_scope_key is None
+                else security_scope_key
+            )
+            scope_kwargs = (
+                {"security_scope_key": resolved_scope_key}
+                if resolved_scope_key is not None
+                else {}
+            )
             return cast(
                 list[str],
                 await self._client.aadd_texts(
-                    self.dataset_id, text_list, ids=add_ids, metadatas=metadatas
+                    self.dataset_id,
+                    text_list,
+                    ids=add_ids,
+                    metadatas=metadatas,
+                    **scope_kwargs,
                 ),
             )
         return cast(
             list[str],
             await asyncio.to_thread(
-                self._add_texts, text_list, ids=add_ids, metadatas=metadatas
+                self._add_texts,
+                text_list,
+                ids=add_ids,
+                metadatas=metadatas,
+                security_scope_key=security_scope_key,
             ),
         )
 
@@ -191,10 +221,15 @@ class VectorAmpVectorStore(VectorStore):
         metadatas: Optional[list[dict[str, Any]]] = None,
         *,
         ids: Optional[list[str]] = None,
+        security_scope_key: Optional[str] = None,
         **kwargs: Any,
     ) -> VST:
         """Create a VectorAmpVectorStore and add texts using hosted embeddings."""
-        store = cls(embedding=embedding, **kwargs)
+        store = cls(
+            embedding=embedding,
+            security_scope_key=security_scope_key,
+            **kwargs,
+        )
         store.add_texts(texts, metadatas=metadatas, ids=ids)
         return store
 
@@ -220,9 +255,15 @@ class VectorAmpVectorStore(VectorStore):
         metadatas: Optional[list[dict[str, Any]]] = None,
         *,
         ids: Optional[list[str]] = None,
+        security_scope_key: Optional[str] = None,
     ) -> list[str]:
         """Convenience helper for async population of an existing store."""
-        return await self.aadd_texts(texts, metadatas=metadatas, ids=ids)
+        return await self.aadd_texts(
+            texts,
+            metadatas=metadatas,
+            ids=ids,
+            security_scope_key=security_scope_key,
+        )
 
     def close(self) -> None:
         """Close owned HTTP resources when using the default client."""
@@ -255,11 +296,32 @@ class VectorAmpVectorStore(VectorStore):
         *,
         ids: Optional[Sequence[VectorId]],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
+        security_scope_key: Optional[str],
     ) -> list[VectorId]:
+        resolved_scope_key = (
+            self.security_scope_key if security_scope_key is None else security_scope_key
+        )
+        scope_kwargs = (
+            {"security_scope_key": resolved_scope_key}
+            if resolved_scope_key is not None
+            else {}
+        )
         if hasattr(self._client, "add_texts"):
-            return self._client.add_texts(self.dataset_id, texts, ids=ids, metadatas=metadatas)
+            return self._client.add_texts(
+                self.dataset_id,
+                texts,
+                ids=ids,
+                metadatas=metadatas,
+                **scope_kwargs,
+            )
         client = cast(Any, self._client)
-        result = client.datasets.add_texts(self.dataset_id, texts, ids=ids, metadatas=metadatas)
+        result = client.datasets.add_texts(
+            self.dataset_id,
+            texts,
+            ids=ids,
+            metadatas=metadatas,
+            **scope_kwargs,
+        )
         if ids is not None:
             return list(ids)
         inserted_ids = result.get("ids") or result.get("vector_ids") or result.get("inserted_ids")

@@ -41,6 +41,7 @@ store = VectorAmpVectorStore(dataset_name="docs")   # or dataset_id="..."
 store.add_texts(
     ["VectorAmp is built for billion-scale vector search."],
     metadatas=[{"source": "readme"}],
+    security_scope_key="tenant-acme",  # optional; omission uses the dataset default
 )
 
 docs = store.similarity_search(
@@ -54,6 +55,18 @@ docs = store.similarity_search(
 `add_texts` embeds each text with the dataset's hosted model, copies the source
 text into `metadata.text`, generates ids when you omit them, and inserts the
 vectors in one call.
+
+`security_scope_key` selects an active dataset-local scope by external key. Set it on the store to
+use one default for all writes, or pass it to `add_texts`/`aadd_texts` for one operation:
+
+```python
+store = VectorAmpVectorStore(dataset_name="docs", security_scope_key="tenant-acme")
+store.add_texts(["private handbook"])
+store.add_texts(["partner copy"], security_scope_key="partner-beta")
+```
+
+Search needs no scope argument. VectorAmp automatically filters results using the caller's
+effective permissions.
 
 ### Vector ids: strings or integers
 
@@ -184,13 +197,14 @@ VectorAmpVectorStore(
     client: VectorAmpHTTPClient | None = None,
     embedding: Embeddings | None = None,   # accepted but ignored (server-side embedding)
     timeout: float = 30.0,
+    security_scope_key: str | None = None, # optional default for all text writes
 )
 ```
 
 | Method | Required | Optional (defaults) | Returns |
 |---|---|---|---|
-| `add_texts(texts, metadatas=None, *, ids=None, **kwargs)` | `texts` | `metadatas`, `ids` (auto-generated UUIDs; str or int) | `list[str \| int]` ids |
-| `aadd_texts(texts, metadatas=None, *, ids=None, **kwargs)` | `texts` | `metadatas`, `ids` | `list[str \| int]` |
+| `add_texts(texts, metadatas=None, *, ids=None, security_scope_key=None, **kwargs)` | `texts` | `metadatas`, `ids` (auto-generated UUIDs; str or int), `security_scope_key` | `list[str \| int]` ids |
+| `aadd_texts(texts, metadatas=None, *, ids=None, security_scope_key=None, **kwargs)` | `texts` | `metadatas`, `ids`, `security_scope_key` | `list[str \| int]` |
 | `similarity_search(query, k=4, **kwargs)` | `query` | `k` (4), `filter`/`filters`, `hybrid`, `sparse_query`, `alpha`, `rerank`, `advanced_filters`, `include_metadata`, `embedding_provider`, `embedding_model`, `nprobe_override`, `rerank_depth_override` | `list[Document]` |
 | `similarity_search_with_score(query, k=4, **kwargs)` | `query` | same as above | `list[tuple[Document, float]]` |
 | `asimilarity_search(query, k=4, **kwargs)` | `query` | same as above | `list[Document]` |
@@ -198,7 +212,7 @@ VectorAmpVectorStore(
 | `delete(ids=[...])` | `ids` | — | `True` |
 | `adelete(ids=[...])` | `ids` | — | `True` |
 | `as_retriever(**kwargs)` | — | `search_kwargs` (e.g. `{"k": 5, "filter": {...}}`), `search_type` | `VectorStoreRetriever` (inherited) |
-| `from_texts(texts, embedding=None, metadatas=None, *, ids=None, **kwargs)` *(classmethod)* | `texts`, plus `dataset_id` or `dataset_name` in `kwargs` | `embedding` (ignored), `metadatas`, `ids` | `VectorAmpVectorStore` |
+| `from_texts(texts, embedding=None, metadatas=None, *, ids=None, security_scope_key=None, **kwargs)` *(classmethod)* | `texts`, plus `dataset_id` or `dataset_name` in `kwargs` | `embedding` (ignored), `metadatas`, `ids`, `security_scope_key` | `VectorAmpVectorStore` |
 | `from_documents(documents, embedding=None, **kwargs)` *(classmethod)* | `documents`, plus `dataset_id` or `dataset_name` | `embedding` (ignored) | `VectorAmpVectorStore` |
 | `afrom_texts_instance(texts, metadatas=None, *, ids=None)` | `texts` | `metadatas`, `ids` | `list[str \| int]` |
 | `close()` / `aclose()` | — | — | `None` |

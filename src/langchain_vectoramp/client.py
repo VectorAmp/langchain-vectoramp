@@ -86,10 +86,13 @@ class VectorAmpHTTPClient:
         *,
         ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
+        security_scope_key: Optional[str] = None,
     ) -> list[VectorId]:
         embeddings = self._embed(dataset_id, texts)
         vector_ids = self._build_ids(texts, ids)
-        self._insert_vectors(dataset_id, texts, embeddings, vector_ids, metadatas)
+        self._insert_vectors(
+            dataset_id, texts, embeddings, vector_ids, metadatas, security_scope_key
+        )
         return vector_ids
 
     async def aadd_texts(
@@ -99,10 +102,13 @@ class VectorAmpHTTPClient:
         *,
         ids: Optional[Sequence[VectorId]] = None,
         metadatas: Optional[Sequence[Mapping[str, Any]]] = None,
+        security_scope_key: Optional[str] = None,
     ) -> list[VectorId]:
         embeddings = await self._aembed(dataset_id, texts)
         vector_ids = self._build_ids(texts, ids)
-        await self._ainsert_vectors(dataset_id, texts, embeddings, vector_ids, metadatas)
+        await self._ainsert_vectors(
+            dataset_id, texts, embeddings, vector_ids, metadatas, security_scope_key
+        )
         return vector_ids
 
     def search(self, dataset_id: str, query: str, *, k: int, **kwargs: Any) -> JSON:
@@ -191,11 +197,16 @@ class VectorAmpHTTPClient:
         embeddings: Sequence[Sequence[float]],
         ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
+        security_scope_key: Optional[str],
     ) -> JSON:
         return self._request(
             "POST",
             f"/datasets/{dataset_id}/insert",
-            json={"vectors": self._vectors(texts, embeddings, ids, metadatas)},
+            json={
+                "vectors": self._vectors(
+                    texts, embeddings, ids, metadatas, security_scope_key
+                )
+            },
         )
 
     async def _ainsert_vectors(
@@ -205,11 +216,16 @@ class VectorAmpHTTPClient:
         embeddings: Sequence[Sequence[float]],
         ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
+        security_scope_key: Optional[str],
     ) -> JSON:
         return await self._arequest(
             "POST",
             f"/datasets/{dataset_id}/insert",
-            json={"vectors": self._vectors(texts, embeddings, ids, metadatas)},
+            json={
+                "vectors": self._vectors(
+                    texts, embeddings, ids, metadatas, security_scope_key
+                )
+            },
         )
 
     def _request(
@@ -289,6 +305,7 @@ class VectorAmpHTTPClient:
         embeddings: Sequence[Sequence[float]],
         ids: Sequence[VectorId],
         metadatas: Optional[Sequence[Mapping[str, Any]]],
+        security_scope_key: Optional[str],
     ) -> list[JSON]:
         if metadatas is not None and len(metadatas) != len(texts):
             raise ValueError("metadatas length must match texts length.")
@@ -298,7 +315,10 @@ class VectorAmpHTTPClient:
             metadata.setdefault("text", text)
             # ``ids[index]`` keeps its original type (int stays int -> JSON number,
             # str stays str) so the API never rewrites integer ids.
-            vectors.append({"id": ids[index], "values": list(values), "metadata": metadata})
+            vector: JSON = {"id": ids[index], "values": list(values), "metadata": metadata}
+            if security_scope_key is not None:
+                vector["security_scope_key"] = security_scope_key
+            vectors.append(vector)
         return vectors
 
     @staticmethod
