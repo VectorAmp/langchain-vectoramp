@@ -6,6 +6,8 @@ This project follows semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
 ### Added
 
 - Add optional dataset-local `security_scope_key` selection to sync and async text writes.
