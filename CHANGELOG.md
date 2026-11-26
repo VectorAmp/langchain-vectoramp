@@ -6,6 +6,11 @@ This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Add optional dataset-local `security_scope_key` selection to sync and async text writes.
+  Configure a store-wide default or override it for one `add_texts` call.
+
 ### Changed
 
 - **Breaking:** `VectorAmpIntelligence` scopes questions with `dataset_ids` instead of the retired
